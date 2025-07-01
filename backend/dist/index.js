@@ -7,6 +7,7 @@ const express_1 = __importDefault(require("express"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const userRouter_1 = __importDefault(require("./Routes/userRouter"));
+const cors_1 = __importDefault(require("cors"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 // .env should be in the root folder not in src/ or something else
@@ -16,6 +17,10 @@ mongoose_1.default.connect(`${process.env.MONGO_DB}`).then(() => {
     console.error('DB connection error:', err);
 });
 app.use(express_1.default.json());
+app.use((0, cors_1.default)({
+    origin: "http://localhost:5173",
+    credentials: true
+}));
 app.use('/api/v1/user', userRouter_1.default);
 app.get('/api/v2', (req, res) => {
     res.json({ message: 'u have hit the endpoint' });

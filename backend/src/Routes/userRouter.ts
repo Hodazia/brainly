@@ -1,16 +1,18 @@
 import { Request, Response, Router } from 'express';
 import { z } from 'zod';
 import jwt from 'jsonwebtoken'
-import { userModel, contentModel, tagModel , linkModel } from '../db'
+import { userModel, contentModel, linkModel } from '../db'
 import bcrypt from 'bcrypt';
 import dotenv from "dotenv";
 import { UserMiddleware } from '../middleware';
+import { random } from '../utils'
 
 const userRouter = Router();
 
 userRouter.post('/signup', async (req: Request,res:Response) => {
     const { username, password} = req.body;
 
+    // validate the request body via zod
     const userSchema = z.object({
         username: z.string().min(1, { message: "Please Enter your username" }).max(20, { message: "Username must not exceed 20 characters" }),
         password: z.string().min(8, { message: "Password must be at least 8 characters long" }).max(20, { message: "Password must not exceed 20 characters" }).regex(/[A-Z]/, "Password must contain at least one uppercase letter")
@@ -28,6 +30,7 @@ userRouter.post('/signup', async (req: Request,res:Response) => {
 
         return;
     }
+    // hash the password via bcrypt
     const hashedPassword = await bcrypt.hash(password, 8);
 
     try {
@@ -63,7 +66,7 @@ userRouter.post("/signin", async(req: Request, res: Response ) => {
 
     const { username, password } = req.body;
 
-    // --- Debugging Step 1: Check request body data ---
+    // just logging the request body values from API testing via POSTMAN
     console.log("Sign-in attempt for username:", username);
     console.log("Received userPassword (should be plain text):", password);
 
@@ -78,12 +81,12 @@ userRouter.post("/signin", async(req: Request, res: Response ) => {
 
     if (!findUser) {
         return res.status(411).json({
-            message: "Enter a valid email address" // Or "User not found" for clarity
+            message: "Enter a valid email address" 
         });
     }
 
-    // --- Debugging Step 2: Check password from database ---
-    const storedPasswordHash = findUser.password; // This will be the actual Mongoose document field
+    // Find the hashed password from the DB
+    const storedPasswordHash = findUser.password; 
 
     console.log("Stored password hash (from DB):", storedPasswordHash);
 
@@ -135,18 +138,18 @@ userRouter.post("/signin", async(req: Request, res: Response ) => {
 
 //@ts-ignore
 userRouter.post("/content", UserMiddleware, async function (req, res) {
-    const { type, link, title, tags, notes } = req.body;
+    const { type, link, title, tags } = req.body;
 
     //@ts-ignore
     const UserID = req.userId;
-
+    console.log(UserID, '\n')
+    console.log(type, '\n', link, '\n', title, '\n', tags, '\n');
     try {
         await contentModel.create({
             type: type,
             link: link,
             title: title,
             tags: tags,
-            notes: notes,
             userId: UserID,
         })
 
@@ -159,4 +162,79 @@ userRouter.post("/content", UserMiddleware, async function (req, res) {
         res.status(500).json({ error: "Internal server error" });
     }
 })
+
+//@ts-ignore
+userRouter.post("/brain/share", UserMiddleware,async (req: Request,res:Response) => {
+    const share = req.body.share
+
+    //@ts-ignore
+    const userId = req.userId;
+    const Hash = random(8);
+
+    if (share) {
+        const existingLink = await linkModel.findOne({
+            userId: userId
+        })
+
+        if (existingLink) {
+            res.json({
+                message: "Shareable link already exist",
+                Link: existingLink.Hash
+            });
+
+            return;
+        }
+
+        await linkModel.create({
+            userId: userId,
+            Hash: Hash
+        })
+    }
+    else {
+        await linkModel.deleteOne({
+            userId: userId,
+        })
+    }
+
+    res.json({
+        message: "Sharable link is created",
+        Link: Hash
+    })
+})
+
+//@ts-ignore
+userRouter.get("/brain/share/:shareId", UserMiddleware, async (req,res) => {
+    const shareLink = req.params.shareId;
+    const link = await linkModel.findOne({
+        Hash: shareLink.toString()
+    });
+
+    if (!link) {
+        res.status(411).json({
+            message: "Sorry incorrect input"
+        })
+        return;
+    }
+
+    const user = await userModel.findOne({
+        _id: link.userId
+    })
+
+    const Content = await contentModel.find({
+        userId: link.userId
+    })
+
+    if (!user) {
+        res.status(411).json({
+            message: "user not found, error should ideally not happen"
+        })
+        return ;
+    }
+
+    res.json({
+        username: user.username,
+        content: Content
+    })
+})
+
 export default userRouter

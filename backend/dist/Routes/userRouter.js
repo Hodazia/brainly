@@ -18,9 +18,11 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const db_1 = require("../db");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const middleware_1 = require("../middleware");
+const utils_1 = require("../utils");
 const userRouter = (0, express_1.Router)();
 userRouter.post('/signup', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { username, password } = req.body;
+    // validate the request body via zod
     const userSchema = zod_1.z.object({
         username: zod_1.z.string().min(1, { message: "Please Enter your username" }).max(20, { message: "Username must not exceed 20 characters" }),
         password: zod_1.z.string().min(8, { message: "Password must be at least 8 characters long" }).max(20, { message: "Password must not exceed 20 characters" }).regex(/[A-Z]/, "Password must contain at least one uppercase letter")
@@ -35,6 +37,7 @@ userRouter.post('/signup', (req, res) => __awaiter(void 0, void 0, void 0, funct
         });
         return;
     }
+    // hash the password via bcrypt
     const hashedPassword = yield bcrypt_1.default.hash(password, 8);
     try {
         yield db_1.userModel.create({
@@ -63,7 +66,7 @@ userRouter.post('/signup', (req, res) => __awaiter(void 0, void 0, void 0, funct
 //@ts-ignore
 userRouter.post("/signin", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { username, password } = req.body;
-    // --- Debugging Step 1: Check request body data ---
+    // just logging the request body values from API testing via POSTMAN
     console.log("Sign-in attempt for username:", username);
     console.log("Received userPassword (should be plain text):", password);
     if (!username || typeof username !== 'string') {
@@ -75,11 +78,11 @@ userRouter.post("/signin", (req, res) => __awaiter(void 0, void 0, void 0, funct
     const findUser = yield db_1.userModel.findOne({ username: username });
     if (!findUser) {
         return res.status(411).json({
-            message: "Enter a valid email address" // Or "User not found" for clarity
+            message: "Enter a valid email address"
         });
     }
-    // --- Debugging Step 2: Check password from database ---
-    const storedPasswordHash = findUser.password; // This will be the actual Mongoose document field
+    // Find the hashed password from the DB
+    const storedPasswordHash = findUser.password;
     console.log("Stored password hash (from DB):", storedPasswordHash);
     if (!storedPasswordHash || typeof storedPasswordHash !== 'string') {
         console.error(`Error: User '${username}' found, but 'password' field is missing or not a string in the database.`);
@@ -120,16 +123,17 @@ userRouter.post("/signin", (req, res) => __awaiter(void 0, void 0, void 0, funct
 //@ts-ignore
 userRouter.post("/content", middleware_1.UserMiddleware, function (req, res) {
     return __awaiter(this, void 0, void 0, function* () {
-        const { type, link, title, tags, notes } = req.body;
+        const { type, link, title, tags } = req.body;
         //@ts-ignore
         const UserID = req.userId;
+        console.log(UserID, '\n');
+        console.log(type, '\n', link, '\n', title, '\n', tags, '\n');
         try {
             yield db_1.contentModel.create({
                 type: type,
                 link: link,
                 title: title,
                 tags: tags,
-                notes: notes,
                 userId: UserID,
             });
             res.status(200).json({ message: "Content created successfully" });
@@ -140,4 +144,65 @@ userRouter.post("/content", middleware_1.UserMiddleware, function (req, res) {
         }
     });
 });
+//@ts-ignore
+userRouter.post("/brain/share", middleware_1.UserMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const share = req.body.share;
+    //@ts-ignore
+    const userId = req.userId;
+    const Hash = (0, utils_1.random)(8);
+    if (share) {
+        const existingLink = yield db_1.linkModel.findOne({
+            userId: userId
+        });
+        if (existingLink) {
+            res.json({
+                message: "Shareable link already exist",
+                Link: existingLink.Hash
+            });
+            return;
+        }
+        yield db_1.linkModel.create({
+            userId: userId,
+            Hash: Hash
+        });
+    }
+    else {
+        yield db_1.linkModel.deleteOne({
+            userId: userId,
+        });
+    }
+    res.json({
+        message: "Sharable link is created",
+        Link: Hash
+    });
+}));
+//@ts-ignore
+userRouter.get("/brain/share/:shareId", middleware_1.UserMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const shareLink = req.params.shareId;
+    const link = yield db_1.linkModel.findOne({
+        Hash: shareLink.toString()
+    });
+    if (!link) {
+        res.status(411).json({
+            message: "Sorry incorrect input"
+        });
+        return;
+    }
+    const user = yield db_1.userModel.findOne({
+        _id: link.userId
+    });
+    const Content = yield db_1.contentModel.find({
+        userId: link.userId
+    });
+    if (!user) {
+        res.status(411).json({
+            message: "user not found, error should ideally not happen"
+        });
+        return;
+    }
+    res.json({
+        username: user.username,
+        content: Content
+    });
+}));
 exports.default = userRouter;
