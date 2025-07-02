@@ -145,6 +145,31 @@ userRouter.post("/content", middleware_1.UserMiddleware, function (req, res) {
     });
 });
 //@ts-ignore
+userRouter.get("/content", middleware_1.UserMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        //@ts-ignore
+        const userid = req.userId;
+        //checking userid present or not
+        if (!userid) {
+            res.status(400).json({ message: "Something wrong" });
+            return;
+        }
+        // find the data in the contentModel via userId(a key in document) via userid(from the above req.userId)
+        const userData = yield db_1.contentModel.find({ userId: userid });
+        // 
+        console.log("userData: ", userData);
+        res.status(200).json({
+            message: "User data fetched successfully",
+            data: userData,
+        });
+        console.log(userData);
+    }
+    catch (err) {
+        console.log("Err(catch): something went wrong", err);
+        return;
+    }
+}));
+//@ts-ignore
 userRouter.post("/brain/share", middleware_1.UserMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const share = req.body.share;
     //@ts-ignore

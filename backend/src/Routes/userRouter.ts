@@ -164,6 +164,62 @@ userRouter.post("/content", UserMiddleware, async function (req, res) {
 })
 
 //@ts-ignore
+userRouter.get("/content", UserMiddleware, async (req:Request, res:Response) => {
+    try{
+        //@ts-ignore
+        const userid = req.userId;
+    
+        //checking userid present or not
+        if(!userid){
+          res.status(400).json({ message: "Something wrong" });
+          return;
+        }
+
+        // find the data in the contentModel via userId(a key in document) via userid(from the above req.userId)
+        const userData = await contentModel.find({ userId: userid });
+        // 
+        console.log("userData: ", userData);
+        res.status(200).json({
+          message: "User data fetched successfully",
+          data: userData,
+        });
+        console.log(userData)
+      }catch(err){
+        console.log("Err(catch): something went wrong",err)
+        return;
+      }
+})
+
+userRouter.delete("/content", UserMiddleware, async (req:Request, res:Response) => {
+    try{
+        const userid = req.userId;
+        const userTitle = req.body.contentId; // have a contentid in the req.body
+        
+        console.log("userid =>", userid)
+        console.log("contentid =>", userTitle)
+    
+        if (!userid || !userTitle) {
+           res.status(400).json({ message: "User ID or Content ID missing" });
+           return;
+        }
+    
+        const content = await contentModel.findOne({ title: userTitle, userId: userid });
+    
+        if (!content) {
+          res.status(404).json({ message: "Content not found or unauthorized" });
+          return;
+        }
+    
+        await contentModel.findByIdAndDelete(content);
+    
+         res.status(200).json({ message: "Content deleted successfully" });
+         return;
+      }catch(err){
+        console.log("Err(catch): something went wrong",err)
+        return;
+      }
+})
+//@ts-ignore
 userRouter.post("/brain/share", UserMiddleware,async (req: Request,res:Response) => {
     const share = req.body.share
 
